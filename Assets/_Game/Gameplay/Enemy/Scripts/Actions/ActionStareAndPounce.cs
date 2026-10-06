@@ -14,6 +14,7 @@ namespace FifthSemester.Gameplay.Enemy {
         private const string ANIMATOR_KEY = "Animator";
 
         private readonly Blackboard _blackboard;
+        private readonly ConditionLineOfSight _lineOfSight;
         private NavMeshAgent _agent;
         private Transform _target;
         private Animator _animator;
@@ -25,7 +26,6 @@ namespace FifthSemester.Gameplay.Enemy {
         private float _timeInAir = 1.5f; // Tempo de suspense lá no teto
         private float _landAnimDuration = 2f; // Duração da animação dele caindo/aterrissando
         private float _postLandDelay = 1f; // Tempo que o jogador tem para reagir após o land
-        private float _jumpscareRange = 2f; // Distância máxima para iniciar o jumpscare após o post-land delay
 
         [Header("Audio")]
         [SerializeField] private AudioClip _jumpSound;
@@ -35,9 +35,11 @@ namespace FifthSemester.Gameplay.Enemy {
         private PounceState _currentState = PounceState.Staring;
 
         private float _currentTimer = 0f;
+        private bool _attackCancelled;
 
         public ActionStareAndPounce(Blackboard blackboard, string name = "Stare And Pounce") : base(name, blackboard) {
             _blackboard = blackboard;
+            _lineOfSight = new ConditionLineOfSight(blackboard);
             ServiceLocator.TryGet<IAudioService>(out _audioService);
         }
 
@@ -47,6 +49,13 @@ namespace FifthSemester.Gameplay.Enemy {
             if (_animator == null) _animator = _blackboard.GetData<Animator>(ANIMATOR_KEY);
 
             if (_agent == null || _target == null) return Status.Failure;
+
+            if (_currentState == PounceState.Staring && !CanAttackFromSafeLight()) {
+                return Status.Failure;
+            }
+            if (_currentState != PounceState.Staring && !_blackboard.GetData<bool>("IsPlayerInSafeLight")) {
+                _attackCancelled = true;
+            }
 
             switch (_currentState) {
                 case PounceState.Staring:
@@ -105,18 +114,16 @@ namespace FifthSemester.Gameplay.Enemy {
                     ? _blackboard.GetData<Vector3>(LAND_POSITION_KEY)
                     : _target.position;
 
-                if (_agent != null) {
-                    // Try to safely move agent on navmesh; re-enable agent so subsequent actions can use it
-                    if (_agent.isOnNavMesh) {
-                        _agent.Warp(landingTarget);
-                        if (!_agent.enabled) _agent.enabled = true;
-                        _agent.isStopped = true;
-                        _agent.ResetPath();
-                    }
-                    else {
-                        _agent.transform.position = landingTarget;
-                    }
+                if (!NavMesh.SamplePosition(landingTarget, out NavMeshHit landingHit, 4f, NavMesh.AllAreas) &&
+                    !NavMesh.SamplePosition(_agent.transform.position, out landingHit, 4f, NavMesh.AllAreas)) {
+                    return Status.Failure;
                 }
+
+                _agent.transform.position = landingHit.position;
+                _agent.enabled = true;
+                if (!_agent.isOnNavMesh || !_agent.Warp(landingHit.position)) return Status.Failure;
+                _agent.isStopped = true;
+                _agent.ResetPath();
 
                 Vector3 directionToPlayer = (_target.position - _agent.transform.position).normalized;
                 directionToPlayer.y = 0;
@@ -143,45 +150,32 @@ namespace FifthSemester.Gameplay.Enemy {
                 return Status.Running;
             }
 
-            // After the reaction window, check player's distance. If within range, succeed to allow jumpscare.
-            // If the player is still in the safe light at the moment of landing, allow immediate attack.
-            if (_blackboard != null && _blackboard.HasKey("IsPlayerInSafeLight") && _blackboard.GetData<bool>("IsPlayerInSafeLight")) {
-                 if (_agent != null && !_agent.enabled) _agent.enabled = true;
-                if (_agent != null && _agent.isOnNavMesh) {
-                    _agent.isStopped = false;
-                    _agent.ResetPath();
-                    _agent.SetDestination(_target.position);
-                }
-                return Status.Success;
-             }
+            if (_attackCancelled || !CanAttackFromSafeLight()) return Status.Failure;
 
-            if (_target != null && _agent != null) {
-                float distanceToPlayer = Vector3.Distance(_agent.transform.position, _target.position);
-                if (distanceToPlayer <= _jumpscareRange) {
-                    // Ensure agent enabled before proceeding and set a destination so ActionPlayJumpscare can detect arrival
-                    if (!_agent.enabled) _agent.enabled = true;
-                    if (_agent.isOnNavMesh) {
-                        _agent.isStopped = false;
-                        _agent.ResetPath();
-                        _agent.SetDestination(_target.position);
-                    }
-                    return Status.Success;
-                }
-            }
-
-            // Player escaped the reaction window / range
-            return Status.Failure;
+            if (!_agent.isOnNavMesh) return Status.Failure;
+            _agent.isStopped = false;
+            _agent.ResetPath();
+            _agent.SetDestination(_target.position);
+            _blackboard.SetData("PounceRequiresSafeLight", true);
+            return Status.Success;
         }
 
         public override void Reset() {
             base.Reset();
             _currentState = PounceState.Staring;
             _currentTimer = 0f;
+            _attackCancelled = false;
+            _blackboard.SetData("PounceRequiresSafeLight", false);
             // Re-enable agent if it was disabled during the jump
             if (_agent != null && !_agent.enabled) {
                 _agent.enabled = true;
             }
-         }
+        }
+
+        private bool CanAttackFromSafeLight() {
+            return _blackboard.GetData<bool>("IsPlayerInSafeLight") &&
+                   _lineOfSight.Process() == Status.Success;
+        }
 
         private void PlaySfx(AudioClip clip) {
             if (clip == null || _audioService == null) {

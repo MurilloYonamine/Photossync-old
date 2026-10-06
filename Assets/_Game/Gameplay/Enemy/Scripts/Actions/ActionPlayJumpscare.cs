@@ -19,6 +19,7 @@ namespace FifthSemester.Gameplay.Enemy {
         private const string MAIN_MENU_SCENE_NAME = "MainMenu";
 
         private readonly Blackboard _blackboard;
+        private readonly ConditionLineOfSight _lineOfSight;
         private NavMeshAgent _agent;
         private PlayableDirector _director;
         private Transform _target;
@@ -30,6 +31,7 @@ namespace FifthSemester.Gameplay.Enemy {
 
         public ActionPlayJumpscare(Blackboard blackboard, string name = "PlayJumpscare") : base(name, blackboard) {
             _blackboard = blackboard;
+            _lineOfSight = new ConditionLineOfSight(blackboard);
             _gameStateService = ServiceLocator.Get<IGameStateService>();
         }
 
@@ -41,6 +43,10 @@ namespace FifthSemester.Gameplay.Enemy {
             }
 
             if (!_started) {
+                if (_blackboard.GetData<bool>("PounceRequiresSafeLight") &&
+                    (!_blackboard.GetData<bool>("IsPlayerInSafeLight") || _lineOfSight.Process() != Status.Success)) {
+                    return Status.Failure;
+                }
                 if (CanStartJumpscare()) {
                     StartJumpscare();
                     return Status.Running;
