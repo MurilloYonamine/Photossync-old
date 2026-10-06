@@ -2,6 +2,7 @@
 // Data: 05/05/2026
 
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine;
 using FifthSemester.Core.Services;
@@ -41,6 +42,8 @@ namespace FifthSemester.Gameplay.Save {
         }
 
         private static IEnumerator ApplySaveDelayed(GameObject runnerObj) {
+            // Wait until scene components have completed Start (including MissionService).
+            yield return null;
             PlayerController player = null;
             // Espera ate o player ser encontrado na cena (maximo de 10 frames)
             for (int i = 0; i < 10; i++) {
@@ -66,11 +69,15 @@ namespace FifthSemester.Gameplay.Save {
                 Vector3 targetPos = _pending.PlayerPosition.ToVector3();
                 Quaternion targetRot = _pending.PlayerRotation.ToQuaternion();
 
-                if (targetPos == Vector3.zero) {
+                if (!_pending.HasPlayerPosition && targetPos == Vector3.zero) {
                     GameObject spawnPoint = GameObject.Find("PlayerSpawn");
                     if (spawnPoint != null) {
                         targetPos = spawnPoint.transform.position;
                         targetRot = spawnPoint.transform.rotation;
+                    }
+                    else {
+                        targetPos = player.transform.position;
+                        targetRot = player.transform.rotation;
                     }
                 }
 
@@ -78,6 +85,8 @@ namespace FifthSemester.Gameplay.Save {
                 player.transform.rotation = targetRot;
 
                 if (player.Rigidbody != null) {
+                    player.Rigidbody.position = targetPos;
+                    player.Rigidbody.rotation = targetRot;
                     player.Rigidbody.linearVelocity = Vector3.zero;
                     player.Rigidbody.angularVelocity = Vector3.zero;
                 }
@@ -99,11 +108,12 @@ namespace FifthSemester.Gameplay.Save {
                 }
             } 
 
-            if (missionService != null) {
+            if (missionService != null && _pending.CurrentMissionIndex >= 0) {
                 missionService.SkipToMission(_pending.CurrentMissionIndex);
             }
 
-            if (inventoryService != null && _pending.InventoryItemIds.Count > 0) {
+            if (inventoryService != null) {
+                inventoryService.Clear();
                 LoadInventoryItems(inventoryService, _pending.InventoryItemIds);
             }
 
@@ -115,11 +125,9 @@ namespace FifthSemester.Gameplay.Save {
             }
         }
 
-        private static void LoadInventoryItems(IInventoryService<Item> inventoryService, System.Collections.Generic.IReadOnlyList<string> itemIds) {
-            IItemRegistry<Item> itemRegistry = ServiceLocator.Get<IItemRegistry<Item>>();
-            if (itemRegistry == null) {
-                return;
-            }
+        private static void LoadInventoryItems(IInventoryService<Item> inventoryService, IReadOnlyList<string> itemIds) {
+            Item[] sceneItems = Resources.FindObjectsOfTypeAll<Item>();
+            HashSet<Item> restoredItems = new HashSet<Item>();
 
             for (int i = 0; i < itemIds.Count; i++) {
                 string itemId = itemIds[i];
@@ -127,9 +135,18 @@ namespace FifthSemester.Gameplay.Save {
                     continue;
                 }
 
-                Item item = itemRegistry.InstantiateItem(itemId);
-                if (item != null) {
-                    inventoryService.AddItem(item);
+                bool found = false;
+                for (int j = 0; j < sceneItems.Length; j++) {
+                    Item item = sceneItems[j];
+                    if (item == null || !item.gameObject.scene.isLoaded || restoredItems.Contains(item) || item.Id != itemId) continue;
+                    if (inventoryService.AddItem(item)) {
+                        restoredItems.Add(item);
+                        found = true;
+                    }
+                    break;
+                }
+                if (!found) {
+                    Debug.LogWarning($"[SaveLoader] Could not restore item '{itemId}' from the loaded scene.");
                 }
             }
         }

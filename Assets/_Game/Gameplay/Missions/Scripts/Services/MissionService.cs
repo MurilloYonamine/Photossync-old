@@ -35,6 +35,7 @@ namespace FifthSemester.Gameplay.Missions {
         private PlayerController _playerController;
         private Coroutine _autosaveRoutine;
         private bool _isAutosaving;
+        private bool _autosaveRequestedAgain;
         public int CurrentIndex { get; private set; } = -1;
         private void Awake() {
             ServiceLocator.Register<IMissionService>(this);
@@ -53,7 +54,7 @@ namespace FifthSemester.Gameplay.Missions {
 
             SaveData saveData = _saveService?.LoadFromSlot(AUTOSAVE_SLOT);
             int startIndex = saveData?.CurrentMissionIndex ?? 0;
-            if (_defaultSequence != null) {
+            if (_defaultSequence != null && startIndex >= 0) {
                 StartSequence(_defaultSequence);
                 if (startIndex > 0) {
                     SkipToMission(startIndex);
@@ -339,7 +340,12 @@ namespace FifthSemester.Gameplay.Missions {
         }
 
         private void RequestAutosave() {
-            if (_isAutosaving || _saveService == null) {
+            if (_saveService == null) {
+                return;
+            }
+
+            if (_isAutosaving) {
+                _autosaveRequestedAgain = true;
                 return;
             }
 
@@ -362,6 +368,10 @@ namespace FifthSemester.Gameplay.Missions {
 
             _autosaveRoutine = null;
             _isAutosaving = false;
+            if (_autosaveRequestedAgain) {
+                _autosaveRequestedAgain = false;
+                RequestAutosave();
+            }
         }
 
         private void PopulateSaveData(SaveData saveData) {
@@ -388,6 +398,7 @@ namespace FifthSemester.Gameplay.Missions {
             if (player != null) {
                 saveData.PlayerPosition = new Vector3Data(player.transform.position);
                 saveData.PlayerRotation = new QuaternionData(player.transform.rotation);
+                saveData.HasPlayerPosition = true;
 
                 PlayerCamera playerCamera = player.PlayerCamera;
                 if (playerCamera != null) {
@@ -403,6 +414,7 @@ namespace FifthSemester.Gameplay.Missions {
                 if (spawnPoint != null) {
                     saveData.PlayerPosition = new Vector3Data(spawnPoint.transform.position);
                     saveData.PlayerRotation = new QuaternionData(spawnPoint.transform.rotation);
+                    saveData.HasPlayerPosition = true;
                     saveData.CameraTargetPosition = new Vector3Data(spawnPoint.transform.position);
                     saveData.CameraTargetRotation = new QuaternionData(spawnPoint.transform.rotation);
                 }
@@ -412,6 +424,7 @@ namespace FifthSemester.Gameplay.Missions {
                         if (taggedPlayer != null) {
                             saveData.PlayerPosition = new Vector3Data(taggedPlayer.transform.position);
                             saveData.PlayerRotation = new QuaternionData(taggedPlayer.transform.rotation);
+                            saveData.HasPlayerPosition = true;
                         }
                     }
                 }

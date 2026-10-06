@@ -269,6 +269,7 @@ namespace FifthSemester.Gameplay.Map2 {
             if (playerObj != null) {
                 saveData.PlayerPosition = new Vector3Data(playerObj.transform.position);
                 saveData.PlayerRotation = new QuaternionData(playerObj.transform.rotation);
+                saveData.HasPlayerPosition = true;
 
                 var playerCamera = playerObj.GetComponentInChildren<PlayerCamera>();
                 if (playerCamera != null) {
@@ -284,6 +285,7 @@ namespace FifthSemester.Gameplay.Map2 {
                 if (spawnPoint != null) {
                     saveData.PlayerPosition = new Vector3Data(spawnPoint.transform.position);
                     saveData.PlayerRotation = new QuaternionData(spawnPoint.transform.rotation);
+                    saveData.HasPlayerPosition = true;
                     saveData.CameraTargetPosition = new Vector3Data(spawnPoint.transform.position);
                     saveData.CameraTargetRotation = new QuaternionData(spawnPoint.transform.rotation);
                 }

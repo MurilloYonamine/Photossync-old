@@ -40,10 +40,17 @@ namespace FifthSemester.Core.Services {
     }
 
     [System.Serializable]
+    public class MissionProgressEntry {
+        public string MissionId;
+        public string Progress;
+    }
+
+    [System.Serializable]
     public class SaveData {
         public string SceneName = "Game";
         public int CurrentMissionIndex;
         public Dictionary<string, string> MissionProgress = new();
+        public List<MissionProgressEntry> MissionProgressEntries = new();
         public string LastCheckpointId = "default";
         public int SaveVersion = 1;
         public long Timestamp;
@@ -52,6 +59,7 @@ namespace FifthSemester.Core.Services {
         
         public Vector3Data PlayerPosition = new();
         public QuaternionData PlayerRotation = new();
+        public bool HasPlayerPosition;
         
         // Camera State
         public Vector3Data CameraTargetPosition = new();
