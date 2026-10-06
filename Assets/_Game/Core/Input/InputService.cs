@@ -30,6 +30,10 @@ namespace FifthSemester.Core.Events {
         private InputAction _openPause;
         private InputAction _dialogueAdvance;
         private InputAction _skipCutscene;
+        private InputAction _uiReturn;
+        private InputAction _uiNext;
+        private InputAction _uiPrevious;
+        private InputAction _uiScroll;
 
 
         public InputService() {
@@ -37,7 +41,8 @@ namespace FifthSemester.Core.Events {
         }
 
         public void Enable() {
-            _gameInput?.Enable();
+            _gameInput?.Player.Enable();
+            _gameInput?.UI.Enable();
         }
 
         public void Disable() {
@@ -61,6 +66,11 @@ namespace FifthSemester.Core.Events {
             _openPause = _gameInput.Player.OpenPause;
             _dialogueAdvance = _gameInput.UI.Interact;
             _skipCutscene = _gameInput.Player.SkipCutscene;
+            _uiReturn = _gameInput.UI.Return;
+            _uiReturn.AddBinding("<Gamepad>/start");
+            _uiNext = _gameInput.UI.Next;
+            _uiPrevious = _gameInput.UI.Previous;
+            _uiScroll = _gameInput.UI.ScrollWheel;
 
             _dialogueAdvance.started += HandleDialogueAdvance;
 
@@ -81,6 +91,10 @@ namespace FifthSemester.Core.Events {
             _inventoryNavigate.performed += HandleInventoryNavigation;
             _openPause.performed += HandleOpenPause;
             _skipCutscene.started += HandleSkipCutscene;
+            _uiReturn.started += HandleUiReturn;
+            _uiNext.started += HandleUiNext;
+            _uiPrevious.started += HandleUiPrevious;
+            _uiScroll.performed += HandleUiScroll;
 
             ServiceLocator.Get<IEventBus>()?.Subscribe<GameStateChangedEvent>(OnGameStateChanged);
             ServiceLocator.Get<IEventBus>()?.Subscribe<InventoryToggledEvent>(OnInventoryToggled);
@@ -185,6 +199,32 @@ namespace FifthSemester.Core.Events {
         }
         private void OnInventoryToggled(InventoryToggledEvent evt) {
             _isInventoryOpen = evt.IsOpen;
+            ApplyActionMaps();
+        }
+
+        private void HandleUiReturn(InputAction.CallbackContext context) {
+            if (_isInventoryOpen) {
+                PublishEvent(new InventoryToggledEvent(false));
+            }
+            else if (CurrentGameState == GameState.Paused) {
+                LastPauseWasGamepad = context.control != null && context.control.device is Gamepad;
+                PublishEvent(new PauseToggleRequestedEvent());
+            }
+        }
+
+        private void HandleUiNext(InputAction.CallbackContext context) {
+            if (_isInventoryOpen) PublishEvent(new NextInputEvent());
+        }
+
+        private void HandleUiPrevious(InputAction.CallbackContext context) {
+            if (_isInventoryOpen) PublishEvent(new PreviousInputEvent());
+        }
+
+        private void HandleUiScroll(InputAction.CallbackContext context) {
+            if (!_isInventoryOpen) return;
+            float direction = context.ReadValue<Vector2>().y;
+            if (direction > 0f) PublishEvent(new NextInputEvent());
+            else if (direction < 0f) PublishEvent(new PreviousInputEvent());
         }
         public void HandleOpenPause(InputAction.CallbackContext context) {
             if (context.performed) {
@@ -215,32 +255,29 @@ namespace FifthSemester.Core.Events {
 
         public void OnGameStateChanged(GameStateChangedEvent evt) {
             CurrentGameState = evt.CurrentState;
-
-            bool isGameplay = CurrentGameState == GameState.Gameplay;
-
-            if (isGameplay) {
-                _move.Enable();
-                _look.Enable();
-                _jump.Enable();
-                _crouch.Enable();
-                _sprint.Enable();
-                _flash?.Enable();
-            }
-            else {
+            if (CurrentGameState != GameState.Gameplay || _isInventoryOpen) {
                 PublishEvent(new MoveInputEvent(Vector2.zero));
                 PublishEvent(new SprintInputEvent(false));
                 PublishEvent(new CrouchInputEvent(false));
+            }
+            ApplyActionMaps();
+        }
 
-                _move.Disable();
-                _look.Disable();
-                _jump.Disable();
-                _crouch.Disable();
-                _sprint.Disable();
-                _flash?.Disable();
+        private void ApplyActionMaps() {
+            bool gameplayInput = CurrentGameState == GameState.Gameplay && !_isInventoryOpen;
+            if (gameplayInput) {
+                _gameInput.UI.Disable();
+                _gameInput.Player.Enable();
+            }
+            else {
+                _gameInput.Player.Disable();
+                _gameInput.UI.Enable();
+                if (CurrentGameState == GameState.Cutscene) _skipCutscene.Enable();
             }
         }
         public void Dispose() {
             ServiceLocator.Get<IEventBus>()?.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
+            ServiceLocator.Get<IEventBus>()?.Unsubscribe<InventoryToggledEvent>(OnInventoryToggled);
 
             if (_gameInput == null) return;
 
@@ -262,6 +299,10 @@ namespace FifthSemester.Core.Events {
             _openPause.performed -= HandleOpenPause;
             _dialogueAdvance.started -= HandleDialogueAdvance;
             _skipCutscene.started -= HandleSkipCutscene;
+            _uiReturn.started -= HandleUiReturn;
+            _uiNext.started -= HandleUiNext;
+            _uiPrevious.started -= HandleUiPrevious;
+            _uiScroll.performed -= HandleUiScroll;
         }
     }
 }
