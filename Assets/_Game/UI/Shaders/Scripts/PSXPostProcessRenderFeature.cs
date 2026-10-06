@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FifthSemester.Core.Services;
 #if UNITY_6000_0_OR_NEWER
 using UnityEngine.Rendering.RenderGraphModule;
 #endif
@@ -58,30 +59,33 @@ namespace Game.UI.Shaders
 
             private void UpdateMaterialProperties(PSXVolume psxVolume)
             {
-                _material.SetFloat("_EnablePixelate", psxVolume.enablePixelation.value ? 1.0f : 0.0f);
+                ServiceLocator.TryGet<ISettingsService>(out var settingsService);
+
+                _material.SetFloat("_EnablePixelate", (settingsService?.Pixelation ?? psxVolume.enablePixelation.value) ? 1.0f : 0.0f);
                 _material.SetFloat("_PixelResolutionX", psxVolume.pixelResolutionX.value);
                 _material.SetFloat("_PixelResolutionY", psxVolume.pixelResolutionY.value);
 
-                _material.SetFloat("_EnableBarrel", psxVolume.enableBarrelDistortion.value ? 1.0f : 0.0f);
+                _material.SetFloat("_EnableBarrel", (settingsService?.BarrelDistortion ?? psxVolume.enableBarrelDistortion.value) ? 1.0f : 0.0f);
                 _material.SetFloat("_BarrelStrength", psxVolume.barrelStrength.value);
                 _material.SetFloat("_BarrelTightness", psxVolume.barrelTightness.value);
                 _material.SetFloat("_BarrelZoom", psxVolume.barrelZoom.value);
                 _material.SetFloat("_Vignette", psxVolume.cornerVignette.value);
 
-                _material.SetFloat("_EnableDither", psxVolume.enableDithering.value ? 1.0f : 0.0f);
+                _material.SetFloat("_EnableDither", (settingsService?.Dithering ?? psxVolume.enableDithering.value) ? 1.0f : 0.0f);
                 _material.SetFloat("_DitherSpread", psxVolume.ditherSpread.value);
                 _material.SetFloat("_DitherStrength", psxVolume.ditherStrength.value);
 
                 _material.SetFloat("_EnableChromaBleed", psxVolume.enableChromaBleed.value ? 1.0f : 0.0f);
                 _material.SetFloat("_BleedAmount", psxVolume.bleedSpread.value);
 
-                _material.SetFloat("_EnableScanlines", psxVolume.enableScanlines.value ? 1.0f : 0.0f);
+                _material.SetFloat("_EnableScanlines", (settingsService?.Scanlines ?? psxVolume.enableScanlines.value) ? 1.0f : 0.0f);
+                _material.SetFloat("_EnableRollingBands", (settingsService?.RollingBands ?? psxVolume.enableScanlines.value) ? 1.0f : 0.0f);
                 _material.SetFloat("_ScanlineCount", psxVolume.scanlineCount.value);
                 _material.SetFloat("_ScanlineIntensity", psxVolume.scanlineIntensity.value);
                 _material.SetFloat("_RollingBandSpeed", psxVolume.rollingBandSpeed.value);
                 _material.SetFloat("_RollingBandIntensity", psxVolume.rollingBandIntensity.value);
 
-                _material.SetFloat("_EnableGlitch", psxVolume.enableGlitch.value ? 1.0f : 0.0f);
+                _material.SetFloat("_EnableGlitch", (settingsService?.VHSEffect ?? psxVolume.enableGlitch.value) ? 1.0f : 0.0f);
                 _material.SetFloat("_GlitchAmount", psxVolume.glitchAmount.value);
                 _material.SetFloat("_VhsGrain", psxVolume.vhsTapeGrain.value);
             }

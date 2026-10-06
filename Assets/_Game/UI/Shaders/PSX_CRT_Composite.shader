@@ -5,35 +5,36 @@ Shader "PSX/CRT_Composite"
         [HideInInspector] _BlitTexture ("Source Texture", 2D) = "white" {}
 
         [Header(Pixelation)]
-        [Toggle(_PIXELATE_ON)] _EnablePixelate ("Enable Pixelation", Float) = 1.0
+        _EnablePixelate ("Enable Pixelation", Float) = 1.0
         _PixelResolutionX ("Resolution Width", Float) = 320.0
         _PixelResolutionY ("Resolution Height", Float) = 240.0
 
         [Header(CRT Barrel Distortion)]
-        [Toggle(_BARREL_ON)] _EnableBarrel ("Enable Barrel Distortion", Float) = 1.0
+        _EnableBarrel ("Enable Barrel Distortion", Float) = 1.0
         _BarrelStrength ("Distortion Strength", Range(-1.0, 1.0)) = 0.12
         _BarrelTightness ("Tightness", Range(0.1, 10.0)) = 3.0
         _BarrelZoom ("Zoom", Range(0.5, 2.0)) = 0.98
         _Vignette ("Corner Vignette", Range(0.0, 1.0)) = 0.4
 
         [Header(Bayer Dithering)]
-        [Toggle(_DITHER_ON)] _EnableDither ("Enable Dithering", Float) = 1.0
+        _EnableDither ("Enable Dithering", Float) = 1.0
         _DitherSpread ("Quantization Levels", Range(2.0, 64.0)) = 16.0
         _DitherStrength ("Dither Intensity", Range(0.0, 1.0)) = 0.7
 
         [Header(Chroma Bleed Analogo RCA)]
-        [Toggle(_CHROMA_BLEED_ON)] _EnableChromaBleed ("Enable Chroma Bleed", Float) = 1.0
+        _EnableChromaBleed ("Enable Chroma Bleed", Float) = 1.0
         _BleedAmount ("Bleed Spread", Range(0.0, 0.02)) = 0.005
 
         [Header(Scanlines and Rolling Bands)]
-        [Toggle(_SCANLINES_ON)] _EnableScanlines ("Enable Scanlines", Float) = 1.0
+        _EnableScanlines ("Enable Scanlines", Float) = 1.0
+        _EnableRollingBands ("Enable Rolling Bands", Float) = 0.0
         _ScanlineCount ("Scanline Count", Range(50.0, 1200.0)) = 240.0
         _ScanlineIntensity ("Scanline Intensity", Range(0.0, 1.0)) = 0.3
         _RollingBandSpeed ("Band Speed", Range(-10.0, 10.0)) = 1.0
         _RollingBandIntensity ("Band Intensity", Range(0.0, 1.0)) = 0.1
 
         [Header(Glitch and VHS Tape Noise)]
-        [Toggle(_GLITCH_ON)] _EnableGlitch ("Enable VHS / Glitch", Float) = 1.0
+        _EnableGlitch ("Enable VHS / Glitch", Float) = 1.0
         _GlitchAmount ("Jitter Amount", Range(0.0, 0.1)) = 0.01
         _VhsGrain ("Tape Grain Noise", Range(0.0, 1.0)) = 0.1
     }
@@ -59,13 +60,6 @@ Shader "PSX/CRT_Composite"
             #pragma vertex Vert
             #pragma fragment Frag
 
-            #pragma shader_feature_local _PIXELATE_ON
-            #pragma shader_feature_local _BARREL_ON
-            #pragma shader_feature_local _DITHER_ON
-            #pragma shader_feature_local _CHROMA_BLEED_ON
-            #pragma shader_feature_local _SCANLINES_ON
-            #pragma shader_feature_local _GLITCH_ON
-
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
@@ -88,6 +82,7 @@ Shader "PSX/CRT_Composite"
                 float _BleedAmount;
 
                 float _EnableScanlines;
+                float _EnableRollingBands;
                 float _ScanlineCount;
                 float _ScanlineIntensity;
                 float _RollingBandSpeed;
@@ -137,7 +132,6 @@ Shader "PSX/CRT_Composite"
 
                 // 1. Barrel Distortion CRT
                 float edgeMask = 1.0;
-                #if defined(_BARREL_ON)
                 if (_EnableBarrel > 0.5)
                 {
                     float2 centeredUV = uv - 0.5;
@@ -154,10 +148,8 @@ Shader "PSX/CRT_Composite"
                     float edgeY = smoothstep(0.0, 0.04, uv.y) * smoothstep(1.0, 0.96, uv.y);
                     edgeMask = lerp(1.0, edgeX * edgeY, _Vignette);
                 }
-                #endif
 
                 // 2. Glitch / VHS Jitter
-                #if defined(_GLITCH_ON)
                 if (_EnableGlitch > 0.5)
                 {
                     float time = _Time.y * 12.0;
@@ -167,20 +159,16 @@ Shader "PSX/CRT_Composite"
                         uv.x += (Hash12(float2(time, uv.y)) - 0.5) * _GlitchAmount;
                     }
                 }
-                #endif
 
                 // 3. Pixelation
-                #if defined(_PIXELATE_ON)
                 if (_EnablePixelate > 0.5)
                 {
                     float2 targetRes = float2(_PixelResolutionX, _PixelResolutionY);
                     uv = floor(uv * targetRes) / targetRes + (0.5 / targetRes);
                 }
-                #endif
 
                 // 4. Chroma Bleed (Sangramento Analógico RCA)
                 half3 color;
-                #if defined(_CHROMA_BLEED_ON)
                 if (_EnableChromaBleed > 0.5)
                 {
                     float3 centerCol = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv).rgb;
@@ -199,12 +187,8 @@ Shader "PSX/CRT_Composite"
                 {
                     color = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv).rgb;
                 }
-                #else
-                color = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv).rgb;
-                #endif
 
                 // 5. Bayer Dithering
-                #if defined(_DITHER_ON)
                 if (_EnableDither > 0.5)
                 {
                     uint2 pixelPos = (uint2)(uv * _ScreenParams.xy);
@@ -212,28 +196,26 @@ Shader "PSX/CRT_Composite"
                     float3 dithered = color + (dither * _DitherStrength / _DitherSpread);
                     color = floor(dithered * _DitherSpread) / _DitherSpread;
                 }
-                #endif
 
                 // 6. Scanlines & Rolling Bands
-                #if defined(_SCANLINES_ON)
                 if (_EnableScanlines > 0.5)
                 {
                     float scanline = sin(uv.y * _ScanlineCount * 3.14159) * 0.5 + 0.5;
                     color *= lerp(1.0 - _ScanlineIntensity, 1.0, scanline);
+                }
 
+                if (_EnableRollingBands > 0.5)
+                {
                     float roll = sin(uv.y * 10.0 - _Time.y * _RollingBandSpeed) * 0.5 + 0.5;
                     color = lerp(color, color * 0.7, roll * _RollingBandIntensity);
                 }
-                #endif
 
                 // 7. VHS Tape Noise
-                #if defined(_GLITCH_ON)
                 if (_EnableGlitch > 0.5 && _VhsGrain > 0.0)
                 {
                     float grain = (Hash12(uv + _Time.y) - 0.5) * _VhsGrain;
                     color += grain;
                 }
-                #endif
 
                 return half4(color * edgeMask, 1.0);
             }

@@ -93,15 +93,15 @@ namespace FifthSemester.Gameplay.Menu {
             set => SetBool("Settings_Pixelation", value);
         }
         public bool RollingBands {
-            get => GetBool("Settings_RollingBands", true);
+            get => GetBool("Settings_RollingBands", false);
             set => SetBool("Settings_RollingBands", value);
         }
         public bool Scanlines {
-            get => GetBool("Settings_Scanlines", true);
+            get => GetBool("Settings_Scanlines", false);
             set => SetBool("Settings_Scanlines", value);
         }
         public bool VHSEffect {
-            get => GetBool("Settings_VHSEffect", true);
+            get => GetBool("Settings_VHSEffect", false);
             set => SetBool("Settings_VHSEffect", value);
         }
 
