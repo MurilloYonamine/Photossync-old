@@ -35,6 +35,9 @@ namespace FifthSemester.Gameplay.Enemy {
         private NavMeshAgent _agent;
         private Animator _animator;
         private IGameStateService _gameStateService;
+        private bool _paused;
+        private bool _agentWasStopped;
+        private float _animatorSpeedBeforePause;
 
         [Header("Timeline")]
         [SerializeField] private PlayableDirector _jumpscareDirector;
@@ -129,6 +132,12 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void Update() {
+            if (_gameStateService != null && _gameStateService.CurrentState == GameState.Paused) {
+                PauseEnemy();
+                return;
+            }
+            ResumeEnemy();
+
             bool isCutscene = (_gameStateService != null && _gameStateService.CurrentState == GameState.Cutscene) ||
                               (Blackboard != null && Blackboard.HasKey("CutsceneActive") && Blackboard.GetData<bool>("CutsceneActive"));
 
@@ -150,9 +159,29 @@ namespace FifthSemester.Gameplay.Enemy {
 
             _tree?.Process();
 
-            if (_animator != null && _agent != null) {
+            if (_animator != null && _agent.enabled && _agent.isOnNavMesh) {
                 _animator.SetFloat(_speedHash, _agent.velocity.magnitude);
             }
+        }
+
+        private void PauseEnemy() {
+            if (_paused) return;
+            _paused = true;
+            if (_agent.enabled && _agent.isOnNavMesh) {
+                _agentWasStopped = _agent.isStopped;
+                _agent.isStopped = true;
+            }
+            if (_animator != null) {
+                _animatorSpeedBeforePause = _animator.speed;
+                _animator.speed = 0f;
+            }
+        }
+
+        private void ResumeEnemy() {
+            if (!_paused) return;
+            _paused = false;
+            if (_agent.enabled && _agent.isOnNavMesh) _agent.isStopped = _agentWasStopped;
+            if (_animator != null) _animator.speed = _animatorSpeedBeforePause;
         }
 
         private void OnEnable() {

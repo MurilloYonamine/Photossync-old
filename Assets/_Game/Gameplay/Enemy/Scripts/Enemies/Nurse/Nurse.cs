@@ -3,6 +3,7 @@
 
 using FifthSemester.Core.Events;
 using FifthSemester.Core.Services;
+using FifthSemester.Core.States;
 using FifthSemester.Framework.BehaviourTrees;
 using FifthSemester.Gameplay.Inventory;
 using FifthSemester.Gameplay.Map2;
@@ -48,6 +49,10 @@ namespace FifthSemester.Gameplay.Enemy {
             private Blackboard _blackboard;
         private NavMeshAgent _agent;
         private Animator _animator;
+        private IGameStateService _gameStateService;
+        private bool _paused;
+        private bool _agentWasStopped;
+        private float _animatorSpeedBeforePause;
         private IAudioService _audioService;
 
         private float _footstepTimer;
@@ -106,6 +111,7 @@ namespace FifthSemester.Gameplay.Enemy {
             SetupBlackboard();
         }
         private void Start() {
+            _gameStateService = ServiceLocator.Get<IGameStateService>();
             if (_playerCamera == null) _playerCamera = Camera.main;
             ServiceLocator.TryGet<IInventoryService<Item>>(out _inventoryService);
             ServiceLocator.TryGet<IAudioService>(out _audioService);
@@ -177,6 +183,12 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void Update() {
+            if (_gameStateService != null && _gameStateService.CurrentState == GameState.Paused) {
+                PauseEnemy();
+                return;
+            }
+            ResumeEnemy();
+
             if (_isLockedByKey) {
                 if (_agent != null && _agent.isOnNavMesh) {
                     _agent.isStopped = true;
@@ -220,9 +232,7 @@ namespace FifthSemester.Gameplay.Enemy {
         private void RefreshUnlockState() {
             if (_unlockKeyDefinition == null) {
                 _isLockedByKey = false;
-                _isAggressive = true;
-                _blackboard?.SetData("IsAggressive", true);
-                RebuildBehaviourTree(includeChase: true);
+                SetAggressive(true);
                 return;
             }
             if (_inventoryService == null) {
@@ -231,34 +241,56 @@ namespace FifthSemester.Gameplay.Enemy {
 
             if (_inventoryService == null) {
                 _isLockedByKey = false;
-                _isAggressive = false;
-                _blackboard?.SetData("IsAggressive", false);
+                SetAggressive(false);
                 return;
             }
 
             IReadOnlyList<Item> items = _inventoryService.GetItems();
             if (items == null) {
                 _isLockedByKey = false;
-                _isAggressive = false;
-                _blackboard?.SetData("IsAggressive", false);
+                SetAggressive(false);
                 return;
             }
 
             for (int i = 0; i < items.Count; i++) {
                 if (items[i] is Map2KeyItem keyItem && keyItem.KeyDefinition == _unlockKeyDefinition) {
                     // When the player obtains the key, nurse becomes aggressive (chase + jumpscare)
-                    _isAggressive = true;
                     _isLockedByKey = false;
-                    _blackboard?.SetData("IsAggressive", true);
-                    RebuildBehaviourTree(includeChase: true);
+                    SetAggressive(true);
                     return;
                 }
             }
 
             // Key not found - remain unlocked (patrolling), not aggressive
             _isLockedByKey = false;
-            _isAggressive = false;
-            _blackboard?.SetData("IsAggressive", false);
+            SetAggressive(false);
+        }
+
+        private void SetAggressive(bool aggressive) {
+            bool changed = _isAggressive != aggressive;
+            _isAggressive = aggressive;
+            _blackboard?.SetData("IsAggressive", aggressive);
+            if (changed && _tree != null) RebuildBehaviourTree(includeChase: aggressive);
+        }
+
+        private void PauseEnemy() {
+            if (_paused) return;
+            _paused = true;
+            if (_agent.enabled && _agent.isOnNavMesh) {
+                _agentWasStopped = _agent.isStopped;
+                _agent.isStopped = true;
+            }
+            if (_animator != null) {
+                _animatorSpeedBeforePause = _animator.speed;
+                _animator.speed = 0f;
+            }
+        }
+
+        private void ResumeEnemy() {
+            if (!_paused) return;
+            _paused = false;
+            if (_agent.enabled && _agent.isOnNavMesh) _agent.isStopped = _agentWasStopped;
+            if (_animator != null) _animator.speed = _animatorSpeedBeforePause;
         }
 
         private void CheckIfObservedByPlayer() {
