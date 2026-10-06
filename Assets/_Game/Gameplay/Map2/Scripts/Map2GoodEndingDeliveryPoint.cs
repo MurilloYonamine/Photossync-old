@@ -195,57 +195,16 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private IEnumerator PlayGoodEndingVideo(VideoPlayer videoPlayer, GameObject instance) {
-            Debug.Log($"{TAG} PlayGoodEndingVideo: Fading out gameplay before video starts.");
-            // 1. Fazer Fade Out da Gameplay para a tela preta ANTES do vídeo começar
-            if (ServiceLocator.TryGet<IFadeService>(out var fadeService)) {
-                bool fadeToBlackComplete = false;
-                fadeService.FadeOut(_fadeDuration / 2f, () => fadeToBlackComplete = true);
-                yield return new WaitUntil(() => fadeToBlackComplete);
-            } else {
-                yield return new WaitForSeconds(_fadeDuration / 2f);
-            }
-
-            // 2. Com a tela preta, iniciamos o vídeo e fazemos o Fade In (revelando o vídeo)
-            Debug.Log($"{TAG} PlayGoodEndingVideo: Starting video playback and fading in.");
-            videoPlayer.Play();
-            if (ServiceLocator.TryGet<IFadeService>(out fadeService)) {
-                bool fadeRevealComplete = false;
-                fadeService.FadeIn(_fadeDuration / 2f, () => fadeRevealComplete = true);
-                yield return new WaitUntil(() => fadeRevealComplete);
-            } else {
-                yield return new WaitForSeconds(_fadeDuration / 2f);
-            }
-
-            // 3. Aguardar o término do vídeo
-            bool videoFinished = false;
-            videoPlayer.loopPointReached += (vp) => {
-                Debug.Log($"{TAG} PlayGoodEndingVideo: Video finished playing (loop point reached).");
-                videoFinished = true;
-            };
-
-            yield return new WaitUntil(() => videoFinished);
-
-            // 4. Fazer Fade Out do Vídeo para a tela preta DEPOIS que o vídeo terminar
-            Debug.Log($"{TAG} PlayGoodEndingVideo: Beginning final screen fade transition.");
-            if (ServiceLocator.TryGet<IFadeService>(out fadeService)) {
-                bool fadeFinalComplete = false;
-                fadeService.FadeOut(_fadeDuration, () => {
-                    Debug.Log($"{TAG} PlayGoodEndingVideo: Final FadeOut animation complete.");
-                    fadeFinalComplete = true;
-                });
-                yield return new WaitUntil(() => fadeFinalComplete);
-            }
-            else {
-                Debug.LogWarning($"{TAG} PlayGoodEndingVideo: FadeService not available! Performing fallback wait.");
-                yield return new WaitForSeconds(_fadeDuration);
-            }
-
+            yield return Map2EndingVideoPlayback.Play(videoPlayer, _fadeDuration);
             Debug.Log($"{TAG} PlayGoodEndingVideo: Destroying cutscene instance and returning to main menu.");
             Destroy(instance);
             LoadMainMenu();
         }
 
         private void LoadMainMenu() {
+            if (ServiceLocator.TryGet<IFadeService>(out var fadeService)) {
+                fadeService.FadeIn(0f);
+            }
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         }
     }

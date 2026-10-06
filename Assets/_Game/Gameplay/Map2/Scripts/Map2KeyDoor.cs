@@ -60,8 +60,9 @@ namespace FifthSemester.Gameplay.Map2 {
         private IAudioService _audioService;
         private Color _unlockedColor;
         private string _defaultText;
+        private bool _endingStarted;
 
-        public bool IsInteractable => true;
+        public bool IsInteractable => !_endingStarted;
         public bool CanBeOpenedByNurse => _canBeOpenedByNurse;
 
         public string Id => gameObject.name;
@@ -110,6 +111,7 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         public void Interact() {
+            if (_endingStarted) return;
             if (_isBadEndingDoor && !HasDeliveryCutscenePlayed() && !Map2CheatController.IsCheatActive) {
                 if (_map2KeyService != null && _map2KeyService.HasCollectedAllKeys) {
                     TriggerBadEnding();
@@ -333,10 +335,13 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private void TriggerBadEnding() {
+            if (_endingStarted) return;
             if (_badEndingPrefab == null) {
                 Debug.LogError("[Map2KeyDoor] Prefab de Final Ruim não configurado!");
                 return;
             }
+
+            _endingStarted = true;
 
             if (ServiceLocator.TryGet<IGameStateService>(out var gameStateService)) {
                 gameStateService.ChangeState(GameState.Cutscene);
@@ -355,48 +360,15 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private IEnumerator PlayBadEndingVideo(VideoPlayer videoPlayer, GameObject instance) {
-            // 1. Fazer Fade Out da Gameplay para a tela preta ANTES do vídeo começar
-            if (ServiceLocator.TryGet<IFadeService>(out var fadeService)) {
-                bool fadeToBlackComplete = false;
-                fadeService.FadeOut(_fadeDuration / 2f, () => fadeToBlackComplete = true);
-                yield return new WaitUntil(() => fadeToBlackComplete);
-            } else {
-                yield return new WaitForSeconds(_fadeDuration / 2f);
-            }
-
-            // 2. Com a tela preta, iniciamos o vídeo e fazemos o Fade In (revelando o vídeo)
-            videoPlayer.Play();
-            if (ServiceLocator.TryGet<IFadeService>(out fadeService)) {
-                bool fadeRevealComplete = false;
-                fadeService.FadeIn(_fadeDuration / 2f, () => fadeRevealComplete = true);
-                yield return new WaitUntil(() => fadeRevealComplete);
-            } else {
-                yield return new WaitForSeconds(_fadeDuration / 2f);
-            }
-
-            // 3. Aguardar o término do vídeo
-            bool videoFinished = false;
-            videoPlayer.loopPointReached += (vp) => {
-                videoFinished = true;
-            };
-
-            yield return new WaitUntil(() => videoFinished);
-
-            // 4. Fazer Fade Out do Vídeo para a tela preta DEPOIS que o vídeo terminar
-            if (ServiceLocator.TryGet<IFadeService>(out fadeService)) {
-                bool fadeFinalComplete = false;
-                fadeService.FadeOut(_fadeDuration, () => fadeFinalComplete = true);
-                yield return new WaitUntil(() => fadeFinalComplete);
-            }
-            else {
-                yield return new WaitForSeconds(_fadeDuration);
-            }
-
+            yield return Map2EndingVideoPlayback.Play(videoPlayer, _fadeDuration);
             Destroy(instance);
             LoadMainMenu();
         }
 
         private void LoadMainMenu() {
+            if (ServiceLocator.TryGet<IFadeService>(out var fadeService)) {
+                fadeService.FadeIn(0f);
+            }
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         }
     }
