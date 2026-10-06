@@ -5,6 +5,7 @@ using FifthSemester.Gameplay.Inventory;
 using FifthSemester.Gameplay.Enemy;
 using FifthSemester.Player;
 using FifthSemester.Player.Components;
+using FifthSemester.Gameplay.Save;
 using UnityEngine;
 using UnityEngine.Playables;
 
@@ -20,6 +21,7 @@ namespace FifthSemester.Gameplay.Map2 {
         private List<Map2KeyItem> _registeredKeys = new List<Map2KeyItem>(); // Mantido para compatibilidade de assinatura, mas não utilizado
         private IInventoryService<Item> _inventoryService;
         private IEventBus _eventBus;
+        private ISaveService _saveService;
         private bool _played;
 
         public bool HasCollectedAllKeys { get; private set; }
@@ -28,15 +30,44 @@ namespace FifthSemester.Gameplay.Map2 {
             ServiceLocator.Register<IMap2KeyService>(this);
             _eventBus = ServiceLocator.Get<IEventBus>();
             _inventoryService = ServiceLocator.Get<IInventoryService<Item>>();
+            _saveService = ServiceLocator.Get<ISaveService>();
         }
 
         private void Start() {
             _eventBus?.Subscribe<ItemPickedUpEvent>(OnItemPickedUp);
+
+            if (SaveLoader.IsPendingSave) {
+                RestoreKeyState(_saveService.LoadFromSlot("default"));
+            }
+            else if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Game_Mapa2") {
+                SaveMap2Progress();
+            }
         }
 
         private void OnDestroy() {
             _eventBus?.Unsubscribe<ItemPickedUpEvent>(OnItemPickedUp);
-            ServiceLocator.TryGet<IMap2KeyService>(out var dummy);
+            if (ServiceLocator.TryGet<IMap2KeyService>(out var registered) && ReferenceEquals(registered, this)) {
+                ServiceLocator.Unregister<IMap2KeyService>();
+            }
+        }
+
+        private void RestoreKeyState(SaveData saveData) {
+            if (saveData == null || saveData.SceneName != "Game_Mapa2") return;
+
+            bool completed = saveData.Map2KeysCompleted;
+            if (!completed && _triggerKeyDefinition != null) {
+                Map2KeyItem[] keys = Resources.FindObjectsOfTypeAll<Map2KeyItem>();
+                for (int i = 0; i < keys.Length && !completed; i++) {
+                    Map2KeyItem key = keys[i];
+                    if (key == null || !key.gameObject.scene.isLoaded || key.KeyDefinition != _triggerKeyDefinition) continue;
+                    completed = saveData.InventoryItemIds.Contains(key.Id);
+                }
+            }
+
+            if (!completed) return;
+            _played = true;
+            HasCollectedAllKeys = true;
+            DeactivateNurse();
         }
 
         public void RegisterKey(Map2KeyItem key) {
@@ -49,7 +80,9 @@ namespace FifthSemester.Gameplay.Map2 {
 
         private void OnItemPickedUp(ItemPickedUpEvent evt) {
             if (_played) {
-                Debug.Log("[KeyService] OnItemPickedUp: Event ignored because cutscene/all keys completed was already triggered (_played is true).");
+                if (evt.ItemGameObject != null && evt.ItemGameObject.GetComponent<Map2KeyItem>() != null) {
+                    SaveMap2Progress();
+                }
                 return;
             }
             if (evt.ItemGameObject == null) {
@@ -65,9 +98,6 @@ namespace FifthSemester.Gameplay.Map2 {
 
             Debug.Log($"[KeyService] OnItemPickedUp: Key '{picked.name}' (Definition: {(picked.KeyDefinition != null ? picked.KeyDefinition.name : "None")}) was picked up.");
 
-            // Autosave ao pegar a chave no Mapa 2
-            SaveMap2Progress();
-
             // Se uma chave gatilho foi configurada e esta chave corresponde a ela
             if (_triggerKeyDefinition != null) {
                 if (picked.KeyDefinition == _triggerKeyDefinition) {
@@ -79,6 +109,8 @@ namespace FifthSemester.Gameplay.Map2 {
             } else {
                 Debug.LogWarning("[KeyService] OnItemPickedUp: Trigger Key Definition is NOT configured in the inspector! Cannot match keys.");
             }
+
+            SaveMap2Progress();
         }
 
         public bool TryPrepareForLastKey(Map2KeyItem lastKey) {
@@ -247,13 +279,13 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private void SaveMap2Progress() {
-            var saveService = ServiceLocator.Get<ISaveService>();
-            if (saveService == null) return;
+            if (_saveService == null) return;
 
-            SaveData saveData = saveService.LoadFromSlot("default") ?? new SaveData();
+            SaveData saveData = _saveService.LoadFromSlot("default") ?? new SaveData();
 
             saveData.SceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             saveData.CurrentMissionIndex = -1; // Sem missão ativa no Mapa 2
+            saveData.Map2KeysCompleted = HasCollectedAllKeys;
 
             GameObject playerObj = GameObject.FindWithTag("Player");
             if (playerObj == null) {
@@ -301,7 +333,7 @@ namespace FifthSemester.Gameplay.Map2 {
                 }
             }
 
-            saveService.SaveToSlot("default", saveData);
+            _saveService.SaveToSlot("default", saveData);
             Debug.Log("[KeyService] Autosave concluído com sucesso no Mapa 2!");
         }
     }

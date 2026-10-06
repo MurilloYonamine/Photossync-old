@@ -55,7 +55,8 @@ namespace FifthSemester.Tests {
                 HasPlayerPosition = true,
                 PlayerPosition = new Vector3Data(savedPosition),
                 SceneName = "Game_Mapa2",
-                CurrentMissionIndex = -1
+                CurrentMissionIndex = -1,
+                Map2KeysCompleted = true
             };
 
             _saveService.SaveToSlot("map2", data);
@@ -66,6 +67,7 @@ namespace FifthSemester.Tests {
             string expectedScene = string.IsNullOrEmpty(activeScene) || activeScene == "MainMenu" ? "Game_Mapa2" : activeScene;
             Assert.AreEqual(expectedScene, loaded.SceneName);
             Assert.AreEqual(-1, loaded.CurrentMissionIndex);
+            Assert.IsTrue(loaded.Map2KeysCompleted);
         }
 
         [Test]

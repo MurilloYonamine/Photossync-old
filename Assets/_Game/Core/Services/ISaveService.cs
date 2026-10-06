@@ -67,6 +67,7 @@ namespace FifthSemester.Core.Services {
 
         // Inventory
         public List<string> InventoryItemIds = new();
+        public bool Map2KeysCompleted;
 
         public SaveData() {
             Timestamp = System.DateTime.UtcNow.Ticks / 10000000;
