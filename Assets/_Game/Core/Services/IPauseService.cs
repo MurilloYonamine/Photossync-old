@@ -1,17 +1,15 @@
-using System;
-using FifthSemester.Core.Events;
-using FifthSemester.Core.States;
-
 namespace FifthSemester.Core.Services {
-    public interface IPauseService {
-        GameState CurrentState { get; set; }
+    public interface IPauseable {
+        void OnPause();
+        void OnResume();
+    }
 
+    public interface IPauseService {
         void PauseGame();
         void ResumeGame();
         void TogglePause();
-
         bool IsPaused { get; }
-
-        void OnGameStateChanged(GameStateChangedEvent evt);
+        void Register(IPauseable pauseable);
+        void Unregister(IPauseable pauseable);
     }
 }

@@ -6,7 +6,7 @@ using FifthSemester.Core.Input;
 
 namespace FifthSemester.Gameplay {
     public class GameStateService : MonoBehaviour, IGameStateService {
-        private const string TAG = "<color=yellow>[GameStateService]</color>";
+        private const string TAG = "<color=yellow><b>[GameStateService]</b></color>";
         public GameState CurrentState { get; set; } = GameState.Gameplay;
         private GameState _previousState;
 
@@ -20,6 +20,7 @@ namespace FifthSemester.Gameplay {
         }
 
         private void Start() {
+            Time.timeScale = 1f;
             CurrentState = GameState.Gameplay;
 
             if (_eventBus == null) return;
@@ -37,15 +38,14 @@ namespace FifthSemester.Gameplay {
 
             _previousState = CurrentState;
             CurrentState = newState;
+            Time.timeScale = 1f;
 
             if (CurrentState == GameState.Paused) {
                 bool pauseRequestedByGamepad = _inputService != null && _inputService.LastPauseWasGamepad;
-                Time.timeScale = 0f;
                 Cursor.visible = !pauseRequestedByGamepad;
                 Cursor.lockState = pauseRequestedByGamepad ? CursorLockMode.Locked : CursorLockMode.None;
             }
             else {
-                Time.timeScale = 1f;
                 Cursor.visible = false;
                 Cursor.lockState = CursorLockMode.Locked;
             }

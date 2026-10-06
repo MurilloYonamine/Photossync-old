@@ -22,6 +22,8 @@ namespace FifthSemester.Gameplay.Bootstrap {
             var eventBus = new EventBus();
             ServiceLocator.Register<IEventBus>(eventBus);
 
+            ServiceLocator.Register<IPauseService>(new PauseService(eventBus));
+
             var inputService = new InputService();
             inputService.Enable();
             ServiceLocator.Register<IInputService>(inputService);
