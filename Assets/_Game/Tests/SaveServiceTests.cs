@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using FifthSemester.Core.Services;
 using FifthSemester.Gameplay.Save;
+using FifthSemester.Gameplay.Map2;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -79,6 +80,23 @@ namespace FifthSemester.Tests {
             SaveData loaded = _saveService.LoadFromSlot("progress");
 
             Assert.AreEqual("2/3", loaded.MissionProgress["collect"]);
+        }
+
+        [Test]
+        public void SaveAndLoad_RestoresMap2PasswordWithKeyCompletion() {
+            Map2PasswordState password = new Map2PasswordState();
+            password.Initialize("0311");
+            password.TryReveal(0);
+
+            SaveData data = new SaveData {
+                Map2KeysCompleted = true,
+                Map2PasswordJson = JsonUtility.ToJson(password)
+            };
+            _saveService.SaveToSlot("map2_password", data);
+            SaveData loaded = _saveService.LoadFromSlot("map2_password");
+
+            Assert.IsTrue(loaded.Map2KeysCompleted);
+            Assert.AreEqual("0XXX", JsonUtility.FromJson<Map2PasswordState>(loaded.Map2PasswordJson).GetDisplayCode());
         }
 
         [Test]

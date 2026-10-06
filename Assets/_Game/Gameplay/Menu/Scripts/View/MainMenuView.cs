@@ -67,6 +67,10 @@ namespace FifthSemester.Gameplay.Menu {
                 saveService.DeleteSlot(DEFAULT_SLOT);
             }
 
+            // Discard the legacy password only when explicitly starting a new game.
+            PlayerPrefs.DeleteKey("Map2PasswordState");
+            PlayerPrefs.Save();
+
             var inventoryService = ServiceLocator.Get<IInventoryService<Item>>();
             inventoryService?.Clear();
 

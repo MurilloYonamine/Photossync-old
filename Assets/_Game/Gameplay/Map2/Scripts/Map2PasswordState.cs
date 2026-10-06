@@ -1,9 +1,14 @@
 using System;
 using UnityEngine;
+using FifthSemester.Core.Services;
+using FifthSemester.Gameplay.Inventory;
+using FifthSemester.Player;
+using FifthSemester.Player.Components;
 
 namespace FifthSemester.Gameplay.Map2 {
     [Serializable]
     public class Map2PasswordState {
+        private const string DEFAULT_SLOT = "default";
         [SerializeField] private string _targetCode = string.Empty;
         [SerializeField] private bool[] _revealedPositions = Array.Empty<bool>();
 
@@ -122,21 +127,64 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         public static Map2PasswordState Load(string prefsKey) {
-            if (!PlayerPrefs.HasKey(prefsKey)) {
-                return null;
+            ISaveService saveService = ServiceLocator.Get<ISaveService>();
+            SaveData saveData = saveService.LoadFromSlot(DEFAULT_SLOT);
+            if (saveData != null && !string.IsNullOrEmpty(saveData.Map2PasswordJson)) {
+                return JsonUtility.FromJson<Map2PasswordState>(saveData.Map2PasswordJson);
             }
+
+            if (saveData == null || !PlayerPrefs.HasKey(prefsKey)) return null;
 
             string json = PlayerPrefs.GetString(prefsKey);
-            if (string.IsNullOrWhiteSpace(json)) {
-                return null;
-            }
+            if (string.IsNullOrWhiteSpace(json)) return null;
 
-            return JsonUtility.FromJson<Map2PasswordState>(json);
+            Map2PasswordState legacy = JsonUtility.FromJson<Map2PasswordState>(json);
+            if (legacy == null) return null;
+
+            saveData.Map2PasswordJson = json;
+            saveService.SaveToSlot(DEFAULT_SLOT, saveData);
+            DeleteMigratedLegacy(prefsKey, json, saveService);
+            return legacy;
         }
 
         public void Save(string prefsKey) {
+            ISaveService saveService = ServiceLocator.Get<ISaveService>();
+            SaveData saveData = saveService.LoadFromSlot(DEFAULT_SLOT) ?? new SaveData();
             string json = JsonUtility.ToJson(this);
-            PlayerPrefs.SetString(prefsKey, json);
+            saveData.Map2PasswordJson = json;
+
+            PlayerController player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
+            if (player != null) {
+                saveData.PlayerPosition = new Vector3Data(player.transform.position);
+                saveData.PlayerRotation = new QuaternionData(player.transform.rotation);
+                saveData.HasPlayerPosition = true;
+
+                PlayerCamera playerCamera = player.PlayerCamera;
+                if (playerCamera != null && playerCamera.GetCameraTarget() != null) {
+                    Transform cameraTarget = playerCamera.GetCameraTarget();
+                    saveData.CameraTargetPosition = new Vector3Data(cameraTarget.position);
+                    saveData.CameraTargetRotation = new QuaternionData(cameraTarget.rotation);
+                }
+            }
+
+            if (ServiceLocator.TryGet<IInventoryService<Item>>(out var inventory)) {
+                var items = inventory.GetItems();
+                saveData.InventoryItemIds.Clear();
+                for (int i = 0; i < items.Count; i++) {
+                    if (items[i] != null) saveData.InventoryItemIds.Add(items[i].Id);
+                }
+            }
+
+            saveService.SaveToSlot(DEFAULT_SLOT, saveData);
+            DeleteMigratedLegacy(prefsKey, json, saveService);
+        }
+
+        private static void DeleteMigratedLegacy(string prefsKey, string json, ISaveService saveService) {
+            if (!PlayerPrefs.HasKey(prefsKey)) return;
+            SaveData stored = saveService.LoadFromSlot(DEFAULT_SLOT);
+            if (stored == null || stored.Map2PasswordJson != json) return;
+
+            PlayerPrefs.DeleteKey(prefsKey);
             PlayerPrefs.Save();
         }
     }
