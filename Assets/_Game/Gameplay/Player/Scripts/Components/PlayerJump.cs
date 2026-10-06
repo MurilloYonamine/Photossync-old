@@ -8,7 +8,7 @@ using FifthSemester.Core.Events;
 using FifthSemester.Core.Services;
 
 namespace FifthSemester.Player.Components {
-    public class PlayerJump : MonoBehaviour {
+    public class PlayerJump : MonoBehaviour, IPauseable {
         [Header("Jump")]
         [FoldoutGroup("Jump")]
         [SerializeField] private bool _enableJump = true;
@@ -28,15 +28,22 @@ namespace FifthSemester.Player.Components {
         private PlayerMovement _movement;
         private PlayerController _player;
         private IEventBus _eventBus;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private bool _isGrounded;
         private bool _isJumping;
         private float _airTime;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _player = GetComponent<PlayerController>();
             _rigidbody = _player.GetComponent<Rigidbody>();
             _movement = _player.GetComponent<PlayerMovement>();
+        }
+
+        private void OnEnable() {
+            _pauseService.Register(this);
         }
 
         private void Start() {
@@ -45,10 +52,12 @@ namespace FifthSemester.Player.Components {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             _eventBus?.Unsubscribe<JumpInputEvent>(HandleJump);
         }
 
         private void FixedUpdate() {
+            if (_paused) return;
             CheckGround();
             if (_rigidbody == null) return;
 
@@ -79,11 +88,14 @@ namespace FifthSemester.Player.Components {
         }
 
         private void HandleJump(JumpInputEvent evt) {
-            if (!_enableJump) return;
+            if (_paused || !_enableJump) return;
             if (!_isGrounded) return;
 
             Jump();
         }
+
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
 
         private void Jump() {
             if (!_isGrounded || _rigidbody == null) return;

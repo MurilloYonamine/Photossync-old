@@ -3,7 +3,6 @@
 
 using FifthSemester.Core.Events;
 using FifthSemester.Core.Services;
-using FifthSemester.Core.States;
 using FifthSemester.Framework.BehaviourTrees;
 using FifthSemester.Gameplay.Inventory;
 using FifthSemester.Gameplay.Map2;
@@ -14,7 +13,7 @@ using UnityEngine.Playables;
 
 namespace FifthSemester.Gameplay.Enemy {
     [RequireComponent(typeof(NavMeshAgent))]
-    public class Nurse : MonoBehaviour {
+    public class Nurse : MonoBehaviour, IPauseable {
         private const string PLAYER_TARGET_KEY = "PlayerTarget";
         private const string NAV_AGENT_KEY = "NavAgent";
         private const string ANIMATOR_KEY = "Animator";
@@ -49,7 +48,7 @@ namespace FifthSemester.Gameplay.Enemy {
             private Blackboard _blackboard;
         private NavMeshAgent _agent;
         private Animator _animator;
-        private IGameStateService _gameStateService;
+        private IPauseService _pauseService;
         private bool _paused;
         private bool _agentWasStopped;
         private float _animatorSpeedBeforePause;
@@ -88,6 +87,7 @@ namespace FifthSemester.Gameplay.Enemy {
         private float _desiredSpeed = 2.5f;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _agent = GetComponent<NavMeshAgent>();
             _animator = GetComponentInChildren<Animator>();
 
@@ -111,7 +111,6 @@ namespace FifthSemester.Gameplay.Enemy {
             SetupBlackboard();
         }
         private void Start() {
-            _gameStateService = ServiceLocator.Get<IGameStateService>();
             if (_playerCamera == null) _playerCamera = Camera.main;
             ServiceLocator.TryGet<IInventoryService<Item>>(out _inventoryService);
             ServiceLocator.TryGet<IAudioService>(out _audioService);
@@ -127,12 +126,14 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void OnEnable() {
+            _pauseService.Register(this);
             IEventBus eventBus = ServiceLocator.Get<IEventBus>();
             eventBus?.Subscribe<InventoryItemAddedEvent>(OnInventoryItemAdded);
             RefreshUnlockState();
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             IEventBus eventBus = ServiceLocator.Get<IEventBus>();
             eventBus?.Unsubscribe<InventoryItemAddedEvent>(OnInventoryItemAdded);
         }
@@ -183,11 +184,7 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void Update() {
-            if (_gameStateService != null && _gameStateService.CurrentState == GameState.Paused) {
-                PauseEnemy();
-                return;
-            }
-            ResumeEnemy();
+            if (_paused) return;
 
             if (_isLockedByKey) {
                 if (_agent != null && _agent.isOnNavMesh) {
@@ -273,7 +270,7 @@ namespace FifthSemester.Gameplay.Enemy {
             if (changed && _tree != null) RebuildBehaviourTree(includeChase: aggressive);
         }
 
-        private void PauseEnemy() {
+        public void OnPause() {
             if (_paused) return;
             _paused = true;
             if (_agent.enabled && _agent.isOnNavMesh) {
@@ -286,7 +283,7 @@ namespace FifthSemester.Gameplay.Enemy {
             }
         }
 
-        private void ResumeEnemy() {
+        public void OnResume() {
             if (!_paused) return;
             _paused = false;
             if (_agent.enabled && _agent.isOnNavMesh) _agent.isStopped = _agentWasStopped;

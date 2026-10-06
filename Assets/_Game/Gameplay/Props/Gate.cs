@@ -12,7 +12,7 @@ using UnityEngine.SceneManagement;
 
 namespace FifthSemester.Gameplay.Props {
     [RequireComponent(typeof(Collider))]
-    public class Gate : MonoBehaviour, IInteractable {
+    public class Gate : MonoBehaviour, IInteractable, IPauseable {
         [Header("Identity")]
         [SerializeField] private string _id;
 
@@ -45,12 +45,15 @@ namespace FifthSemester.Gameplay.Props {
         private bool _sequenceRunning;
         private bool _isUsed;
         private bool _isLocked;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         public string Id => string.IsNullOrWhiteSpace(_id) ? gameObject.name : _id;
 
         public bool IsInteractable => !_isLocked && !_isUsed && !_sequenceRunning && _transitionView != null && HasCaptionText();
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             if (_outline == null && !TryGetComponent(out _outline)) {
                 _outline = null;
             }
@@ -83,6 +86,11 @@ namespace FifthSemester.Gameplay.Props {
             Highlight(false);
         }
 
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
+
         private void Start() {
             _settingsService = ServiceLocator.Get<ISettingsService>();
             ServiceLocator.TryGet<IFadeService>(out _fadeService);
@@ -96,7 +104,7 @@ namespace FifthSemester.Gameplay.Props {
         }
 
         public void Interact() {
-            if (!CanStartSequence()) {
+            if (_paused || !CanStartSequence()) {
                 return;
             }
 
@@ -190,6 +198,10 @@ namespace FifthSemester.Gameplay.Props {
         }
 
         private void PlayCaptionAndLoadScene() {
+            if (_paused) {
+                StartCoroutine(WaitToPlayCaption());
+                return;
+            }
             if (_transitionView == null) {
                 LoadNextScene();
                 return;
@@ -212,14 +224,22 @@ namespace FifthSemester.Gameplay.Props {
             _transitionView.ShowMessage(message, OnCaptionAnimationCompleted);
         }
 
+        private IEnumerator WaitToPlayCaption() {
+            while (_paused) yield return null;
+            PlayCaptionAndLoadScene();
+        }
+
         private void OnCaptionAnimationCompleted() {
             StartCoroutine(HoldThenLoadScene());
         }
 
         private IEnumerator HoldThenLoadScene() {
-            if (_postTextHoldDuration > 0f) {
-                yield return new WaitForSeconds(_postTextHoldDuration);
+            float remaining = _postTextHoldDuration;
+            while (remaining > 0f) {
+                if (!_paused) remaining -= Time.deltaTime;
+                yield return null;
             }
+            while (_paused) yield return null;
 
             if (_transitionView != null) {
                 _transitionView.ClearMessage();
@@ -229,6 +249,10 @@ namespace FifthSemester.Gameplay.Props {
         }
 
         private void LoadNextScene() {
+            if (_paused) {
+                StartCoroutine(WaitToLoadScene());
+                return;
+            }
             if (string.IsNullOrWhiteSpace(_nextSceneName)) {
                 Debug.LogError($"[Gate] Next scene name is empty on {name}.");
                 _sequenceRunning = false;
@@ -236,6 +260,11 @@ namespace FifthSemester.Gameplay.Props {
             }
 
             SceneManager.LoadScene(_nextSceneName);
+        }
+
+        private IEnumerator WaitToLoadScene() {
+            while (_paused) yield return null;
+            LoadNextScene();
         }
     }
 }

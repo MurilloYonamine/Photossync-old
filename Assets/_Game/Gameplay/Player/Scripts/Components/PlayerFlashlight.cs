@@ -11,7 +11,7 @@ using FifthSemester.Gameplay.Dialogue;
 using FifthSemester.Features.Localization;
 
 namespace FifthSemester.Player.Components {
-    public class PlayerFlashlight : MonoBehaviour {
+    public class PlayerFlashlight : MonoBehaviour, IPauseable {
         [Header("References")]
         [SerializeField] private Light _spotLight;
         [SerializeField, Tooltip("Transform used as origin for the flashlight (usually the player camera)")] private Transform _lightOrigin;
@@ -50,8 +50,11 @@ namespace FifthSemester.Player.Components {
         private Camera _camera;
         private Vector2 _lookInput;
         private GameObject _currentIlluminatedTarget;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             if (_spotLight == null) _spotLight = GetComponentInChildren<Light>();
 
             if (_lightOrigin == null && Camera.main != null) {
@@ -62,6 +65,14 @@ namespace FifthSemester.Player.Components {
                 _spotLight.transform.SetParent(_lightOrigin, false);
                 _spotLight.enabled = false;
             }
+        }
+
+        private void OnEnable() {
+            _pauseService.Register(this);
+        }
+
+        private void OnDisable() {
+            _pauseService.Unregister(this);
         }
 
         private void Start() {
@@ -92,6 +103,7 @@ namespace FifthSemester.Player.Components {
         }
 
         private void HandleFlashlightInput(FlashlightInputEvent evt) {
+            if (_paused) return;
             if (evt.IsPressed && !_hasFlashlight) {
                 if (Time.time - _lastNoFlashlightPressTime > _warningTimeWindow) {
                     _noFlashlightPressCount = 0;
@@ -127,8 +139,15 @@ namespace FifthSemester.Player.Components {
         }
 
         private void LateUpdate() {
-            if (_isOn) AimLightTowardsPointer();
+            if (_isOn && !_paused) AimLightTowardsPointer();
         }
+
+        public void OnPause() {
+            _paused = true;
+            if (_eventBus != null) ClearIlluminatedTarget();
+        }
+
+        public void OnResume() { _paused = false; }
 
         private void AimLightTowardsPointer() {
             if (_spotLight == null || _lightOrigin == null || _camera == null) return;

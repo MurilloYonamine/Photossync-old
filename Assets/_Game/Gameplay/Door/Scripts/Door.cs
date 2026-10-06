@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace FifthSemester.Doors {
     [RequireComponent(typeof(Outline))]
-    public class Door : MonoBehaviour, IInteractable {
+    public class Door : MonoBehaviour, IInteractable, IPauseable {
         [Header("Configurações Visuais")]
         [SerializeField] private Outline _outline;
         [SerializeField] private TextMeshPro _textLocal;
@@ -39,6 +39,8 @@ namespace FifthSemester.Doors {
         private bool _isLocked = false;
         private Color _unlockedColor;
         private IAudioService _audioService;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         public bool IsInteractable { get; private set; } = true;
 
@@ -46,6 +48,7 @@ namespace FifthSemester.Doors {
         private string _defaultText;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _outline = GetComponent<Outline>();
             _outline.enabled = false;
 
@@ -63,6 +66,11 @@ namespace FifthSemester.Doors {
             _unlockedColor = new Color32(105, 255, 144, 255); // 69FF90
         }
 
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
+
         private void Start() {
             ServiceLocator.TryGet<IAudioService>(out _audioService);
 
@@ -78,7 +86,7 @@ namespace FifthSemester.Doors {
         }
 
         private void Update() {
-            if (_activeDoorMeshes == null || _targetRotations == null) return;
+            if (_paused || _activeDoorMeshes == null || _targetRotations == null) return;
 
             for (int i = 0; i < _activeDoorMeshes.Length; i++) {
                 Transform doorMesh = _activeDoorMeshes[i];
@@ -89,7 +97,7 @@ namespace FifthSemester.Doors {
         }
 
         public void Interact() {
-            if (_isLocked) return;
+            if (_paused || _isLocked) return;
 
             _isOpen = !_isOpen;
             PlayDoorSound();

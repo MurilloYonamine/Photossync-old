@@ -9,7 +9,7 @@ using FifthSemester.Gameplay.Map2;
 using UnityEngine;
 
 namespace FifthSemester.Player {
-    public class PlayerInteraction : MonoBehaviour {
+    public class PlayerInteraction : MonoBehaviour, IPauseable {
         [SerializeField] private Camera _playerCamera;
 
         [Header("Settings")]
@@ -27,8 +27,11 @@ namespace FifthSemester.Player {
         private IDeferredInteractionCompletion _pendingDeferredCompletion;
         private string _pendingInteractableId;
         private DocumentTrigger _activeDocument;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _playerController = GetComponent<PlayerController>();
 
             if (_playerCamera == null) {
@@ -43,6 +46,10 @@ namespace FifthSemester.Player {
             }
         }
 
+        private void OnEnable() {
+            _pauseService.Register(this);
+        }
+
         private void Start() {
             _audioService = ServiceLocator.Get<IAudioService>();
             _inventoryService = ServiceLocator.Get<IInventoryService<Item>>();
@@ -53,6 +60,7 @@ namespace FifthSemester.Player {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             _eventBus?.Unsubscribe<InteractInputEvent>(Interact);
             _eventBus?.Unsubscribe<DialogueEndedEvent>(OnDialogueEnded);
 
@@ -67,6 +75,7 @@ namespace FifthSemester.Player {
         }
 
         private void Update() {
+            if (_paused) return;
             var newInteractable = GetInteractableFromRay();
 
             if (_currentInteractable != newInteractable) {
@@ -131,6 +140,7 @@ namespace FifthSemester.Player {
         }
 
         private void Interact(InteractInputEvent evt) {
+            if (_paused) return;
             if (_activeDocument != null) {
                 DocumentTrigger documentToClose = _activeDocument;
                 _activeDocument = null;
@@ -162,6 +172,14 @@ namespace FifthSemester.Player {
                 HandleInteractionCompleted(_currentInteractable);
             }
         }
+
+        public void OnPause() {
+            _paused = true;
+            _currentInteractable?.Highlight(false);
+            _currentInteractable = null;
+        }
+
+        public void OnResume() { _paused = false; }
 
         private void HandleInteractionCompleted(IInteractable interactable) {
             if (interactable == null) {

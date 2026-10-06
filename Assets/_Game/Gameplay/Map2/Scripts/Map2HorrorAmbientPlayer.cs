@@ -3,7 +3,7 @@ using FifthSemester.Core.Services;
 using UnityEngine;
 
 namespace FifthSemester.Gameplay.Map2 {
-    public class Map2HorrorAmbientPlayer : MonoBehaviour {
+    public class Map2HorrorAmbientPlayer : MonoBehaviour, IPauseable {
         [Header("Ambient Clips")]
         [SerializeField] private AudioClip[] _ambientClips;
 
@@ -20,10 +20,17 @@ namespace FifthSemester.Gameplay.Map2 {
         private Coroutine _ambientRoutine;
         private int _lastClipIndex = -1;
         private IAudioService _audioService;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             ServiceLocator.TryGet<IAudioService>(out _audioService);
         }
+
+        private void OnEnable() { _pauseService.Register(this); }
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
 
         private void Start() {
             if (_playOnStart) {
@@ -61,7 +68,11 @@ namespace FifthSemester.Gameplay.Map2 {
 
         private IEnumerator WaitForNextPlayback() {
             float delay = Random.Range(_minDelay, Mathf.Max(_minDelay, _maxDelay));
-            yield return new WaitForSeconds(delay);
+            while (delay > 0f) {
+                if (!_paused) delay -= Time.deltaTime;
+                yield return null;
+            }
+            while (_paused) yield return null;
         }
 
         private bool TryGetRandomClip(out AudioClip clip) {
@@ -106,6 +117,7 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             StopAmbientLoop();
         }
     }

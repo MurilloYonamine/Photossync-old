@@ -7,13 +7,18 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace FifthSemester.Player.Components {
-    public class PlayerMovement : MonoBehaviour {
+    public class PlayerMovement : MonoBehaviour, IPauseable {
 
         private Rigidbody _rigidbody;
         private MovementState _currentState;
         private PlayerController _player;
         private IEventBus _eventBus;
         private IAudioService _audioService;
+        private IPauseService _pauseService;
+        private bool _paused;
+        private bool _wasKinematic;
+        private Vector3 _storedVelocity;
+        private Vector3 _storedAngularVelocity;
 
         [Header("Movement")]
         [FoldoutGroup("Movement")]
@@ -81,6 +86,7 @@ namespace FifthSemester.Player.Components {
         #region Unity Lifecycle
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _player = GetComponent<PlayerController>();
             _rigidbody = GetComponent<Rigidbody>();
 
@@ -93,6 +99,10 @@ namespace FifthSemester.Player.Components {
             ChangeState(new PlayerWalkingState(this));
         }
 
+        private void OnEnable() {
+            _pauseService.Register(this);
+        }
+
         private void Start() {
             _audioService = ServiceLocator.Get<IAudioService>();
 
@@ -103,19 +113,21 @@ namespace FifthSemester.Player.Components {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             _eventBus?.Unsubscribe<MoveInputEvent>(HandleMove);
             _eventBus?.Unsubscribe<SprintInputEvent>(HandleSprint);
             _eventBus?.Unsubscribe<CrouchInputEvent>(HandleCrouch);
         }
 
         private void Update() {
+            if (_paused) return;
             HandleSprintStamina();
             HandleSprintExhaustedSfx();
             _currentState?.Tick();
         }
 
         private void FixedUpdate() {
-            if (!PlayerCanMove || Rigidbody == null) return;
+            if (_paused || !PlayerCanMove || Rigidbody == null) return;
 
             Vector2 moveInput = MoveInput;
             Vector3 input = new Vector3(moveInput.x, 0f, moveInput.y);
@@ -135,6 +147,28 @@ namespace FifthSemester.Player.Components {
             Vector3 targetVelocity = PlayerTransform.TransformDirection(input) * currentSpeed;
 
             ApplyVelocity(targetVelocity);
+        }
+
+        public void OnPause() {
+            if (_paused) return;
+            _paused = true;
+            _moveInput = Vector2.zero;
+            _wasKinematic = _rigidbody.isKinematic;
+            if (!_wasKinematic) {
+                _storedVelocity = _rigidbody.linearVelocity;
+                _storedAngularVelocity = _rigidbody.angularVelocity;
+                _rigidbody.isKinematic = true;
+            }
+        }
+
+        public void OnResume() {
+            if (!_paused) return;
+            _paused = false;
+            if (!_wasKinematic) {
+                _rigidbody.isKinematic = false;
+                _rigidbody.linearVelocity = _storedVelocity;
+                _rigidbody.angularVelocity = _storedAngularVelocity;
+            }
         }
 
         public void UpdateFootsteps() {

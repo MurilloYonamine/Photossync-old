@@ -5,7 +5,7 @@ using FifthSemester.Core.Audio;
 using UnityEngine;
 
 namespace FifthSemester.Core.Services {
-    public class WhiteNoiseService : MonoBehaviour, IWhiteNoiseService {
+    public class WhiteNoiseService : MonoBehaviour, IWhiteNoiseService, IPauseable {
         [Header("Audio")]
         [SerializeField] private AudioClip _whiteNoiseClip;
 
@@ -21,6 +21,8 @@ namespace FifthSemester.Core.Services {
         private float _fadeSpeed = 3f;
 
         private IAudioService _audioService;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private AudioTrack _track;
 
@@ -28,12 +30,26 @@ namespace FifthSemester.Core.Services {
         private float _requestedIntensity;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             ServiceLocator.Register<IWhiteNoiseService>(this);
 
             _audioService = ServiceLocator.Get<IAudioService>();
 
             Shader.SetGlobalFloat("_NoiseOpacity", 0f);
         }
+
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+
+        public void OnPause() {
+            _paused = true;
+            _currentIntensity = 0f;
+            _requestedIntensity = 0f;
+            UpdateShader();
+            StopAudio();
+        }
+
+        public void OnResume() { _paused = false; }
 
         private void OnDestroy() {
             ServiceLocator.Unregister<IWhiteNoiseService>();
@@ -42,6 +58,7 @@ namespace FifthSemester.Core.Services {
         }
 
         private void Update() {
+            if (_paused) return;
             _currentIntensity = Mathf.MoveTowards(
                 _currentIntensity,
                 _requestedIntensity,
@@ -55,6 +72,7 @@ namespace FifthSemester.Core.Services {
         }
 
         public void RequestIntensity(float intensity) {
+            if (_paused) return;
             if (intensity > _requestedIntensity) {
                 _requestedIntensity = intensity;
             }

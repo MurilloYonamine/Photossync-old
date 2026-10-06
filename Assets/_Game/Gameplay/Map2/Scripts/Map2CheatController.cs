@@ -2,13 +2,22 @@ using UnityEngine;
 using FifthSemester.Core.Services;
 
 namespace FifthSemester.Gameplay.Map2 {
-    public class Map2CheatController : MonoBehaviour {
+    public class Map2CheatController : MonoBehaviour, IPauseable {
         public static bool IsCheatActive { get; private set; }
 
         [Header("Cheat Settings")]
         [SerializeField] private KeyCode _cheatKey = KeyCode.Alpha9;
+        private IPauseService _pauseService;
+        private bool _paused;
+
+        private void Awake() { _pauseService = ServiceLocator.Get<IPauseService>(); }
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
 
         private void Update() {
+            if (_paused) return;
             if (Input.GetKeyDown(_cheatKey)) {
                 TriggerCheat();
             }

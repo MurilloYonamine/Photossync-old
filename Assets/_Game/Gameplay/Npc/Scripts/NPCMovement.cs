@@ -5,7 +5,7 @@ using FifthSemester.Core.States;
 
 namespace FifthSemester.Gameplay.NPC {
     [RequireComponent(typeof(NavMeshAgent))]
-    public class NPCMovement : MonoBehaviour {
+    public class NPCMovement : MonoBehaviour, IPauseable {
         [SerializeField] private float walkRadius = 20f;
         [SerializeField] private float minWaitTime = 2f;
         [SerializeField] private float maxWaitTime = 5f;
@@ -13,6 +13,10 @@ namespace FifthSemester.Gameplay.NPC {
         private NavMeshAgent _agent;
         private Animator _animator;
         private IGameStateService _gameStateService;
+        private IPauseService _pauseService;
+        private bool _paused;
+        private bool _agentWasStopped;
+        private float _animatorSpeedBeforePause;
         private float _waitTimer;
         private bool _waiting;
 
@@ -23,18 +27,25 @@ namespace FifthSemester.Gameplay.NPC {
 
         private bool _isLookingAtPlayer;
 
-        private void Start() {
+        private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _agent = GetComponent<NavMeshAgent>();
             _animator = GetComponentInChildren<Animator>();
+        }
+
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+
+        private void Start() {
             _gameStateService = ServiceLocator.Get<IGameStateService>();
-            GoToRandomPoint();
+            if (!_paused) GoToRandomPoint();
 
             GameObject player = GameObject.FindWithTag("Player");
             _playerTransform = player.transform;
         }
 
         private void Update() {
-            if (_gameStateService == null || _gameStateService.CurrentState != GameState.Gameplay) {
+            if (_paused || _gameStateService == null || _gameStateService.CurrentState != GameState.Gameplay) {
                 return;
             }
 
@@ -53,6 +64,29 @@ namespace FifthSemester.Gameplay.NPC {
                     GoToRandomPoint();
                 }
             }
+        }
+
+        public void OnPause() {
+            if (_paused) return;
+            _paused = true;
+            if (_agent.enabled && _agent.isOnNavMesh) {
+                _agentWasStopped = _agent.isStopped;
+                _agent.isStopped = true;
+            }
+            if (_animator != null) {
+                _animatorSpeedBeforePause = _animator.speed;
+                _animator.speed = 0f;
+            }
+        }
+
+        public void OnResume() {
+            if (!_paused) return;
+            _paused = false;
+            if (_agent.enabled && _agent.isOnNavMesh) {
+                _agent.isStopped = _agentWasStopped;
+                if (!_agent.hasPath && !_waiting) GoToRandomPoint();
+            }
+            if (_animator != null) _animator.speed = _animatorSpeedBeforePause;
         }
 
         private void GoToRandomPoint() {

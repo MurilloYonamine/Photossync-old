@@ -10,7 +10,7 @@ using Sirenix.OdinInspector;
 using Unity.Cinemachine;
 
 namespace FifthSemester.Player.Components {
-    public class PlayerCamera : MonoBehaviour {
+    public class PlayerCamera : MonoBehaviour, IPauseable {
         private const float GAMEPAD_SENSITIVITY_MULTIPLIER = 2.5f;
 
         [Header("Cinemachine References")]
@@ -49,6 +49,8 @@ namespace FifthSemester.Player.Components {
         private IGameplayService _gameplayService;
         private IInputService _inputService;
         private IGameStateService _gameStateService;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private CinemachinePanTilt _panTilt;
 
@@ -56,6 +58,7 @@ namespace FifthSemester.Player.Components {
         private Vector3 _targetOriginalPos;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _player = GetComponent<PlayerController>();
             _movement = GetComponent<PlayerMovement>();
 
@@ -67,6 +70,10 @@ namespace FifthSemester.Player.Components {
             if (_cameraTarget != null) {
                 _targetOriginalPos = _cameraTarget.localPosition;
             }
+        }
+
+        private void OnEnable() {
+            _pauseService.Register(this);
         }
 
         private void Start() {
@@ -85,6 +92,7 @@ namespace FifthSemester.Player.Components {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             _eventBus?.Unsubscribe<LookInputEvent>(HandleLookInput);
             _eventBus?.Unsubscribe<ZoomInputEvent>(HandleZoomInput);
             _eventBus?.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
@@ -105,7 +113,7 @@ namespace FifthSemester.Player.Components {
         }
 
         private void Update() {
-            if (!_cameraCanMove || _vCam == null || _player == null) return;
+            if (_paused || !_cameraCanMove || _vCam == null || _player == null) return;
 
             ApplyRotation();
 
@@ -116,6 +124,9 @@ namespace FifthSemester.Player.Components {
 
             HandleHeadBob();
         }
+
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
 
         private void HandleLookInput(LookInputEvent evt) {
             _lookInput = evt.Value;

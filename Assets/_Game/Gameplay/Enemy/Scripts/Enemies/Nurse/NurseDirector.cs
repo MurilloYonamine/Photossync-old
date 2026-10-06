@@ -6,7 +6,7 @@ using UnityEngine.AI;
 
 namespace FifthSemester.Gameplay.Enemy {
     [DisallowMultipleComponent]
-    public class NurseDirector : MonoBehaviour {
+    public class NurseDirector : MonoBehaviour, IPauseable {
         [Header("Retreat Settings")]
         [SerializeField] private float retreatDistance = 20f;
         [SerializeField] private Transform[] retreatWaypoints;
@@ -19,16 +19,20 @@ namespace FifthSemester.Gameplay.Enemy {
         [SerializeField] private Nurse _nurseComponent;
         private float _baseSpeed;
         private IEventBus _eventBus;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         private bool _isPlayerSprinting = false;
         private bool _isFlashlightTargeted = false;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _agent = _nurseComponent != null ? _nurseComponent.GetComponent<NavMeshAgent>() : GetComponent<NavMeshAgent>();
             _baseSpeed = _agent != null ? _agent.speed : 3f;
         }
 
         private void OnEnable() {
+            _pauseService.Register(this);
             _eventBus = ServiceLocator.Get<IEventBus>();
             _eventBus?.Subscribe<PlayerSprintChangedEvent>(OnPlayerSprintChanged);
             _eventBus?.Subscribe<FlashlightTargetedEvent>(OnFlashlightTargeted);
@@ -37,6 +41,7 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void OnDisable() {
+            _pauseService.Unregister(this);
             _eventBus?.Unsubscribe<PlayerSprintChangedEvent>(OnPlayerSprintChanged);
             _eventBus?.Unsubscribe<FlashlightTargetedEvent>(OnFlashlightTargeted);
             _eventBus?.Unsubscribe<PlayerEnteredRoomEvent>(OnPlayerEnteredRoom);
@@ -69,11 +74,13 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void OnPlayerSprintChanged(PlayerSprintChangedEvent evt) {
+            if (_paused) return;
             _isPlayerSprinting = evt.IsSprinting;
             UpdateAgentSpeed();
         }
 
         private void OnFlashlightTargeted(FlashlightTargetedEvent evt) {
+            if (_paused) return;
             if (evt.Target == gameObject) {
                 _isFlashlightTargeted = evt.IsIlluminated;
                 UpdateAgentSpeed();
@@ -81,6 +88,7 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void OnPlayerEnteredRoom(PlayerEnteredRoomEvent evt) {
+            if (_paused) return;
             if (evt.Player == null || _agent == null || _nurseComponent == null) return;
 
             Vector3 bestRetreatPoint = transform.position;
@@ -137,10 +145,17 @@ namespace FifthSemester.Gameplay.Enemy {
         }
 
         private void OnPlayerExitedRoom(PlayerExitedRoomEvent evt) {
+            if (_paused) return;
             if (_nurseComponent != null) {
                 _nurseComponent.ResumeFromRetreat();
                 UpdateAgentSpeed();
             }
+        }
+
+        public void OnPause() { _paused = true; }
+        public void OnResume() {
+            _paused = false;
+            UpdateAgentSpeed();
         }
     }
 }

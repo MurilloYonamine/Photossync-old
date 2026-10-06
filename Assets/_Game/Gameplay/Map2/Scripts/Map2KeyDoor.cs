@@ -14,7 +14,7 @@ using System;
 
 namespace FifthSemester.Gameplay.Map2 {
     [RequireComponent(typeof(Outline))]
-    public class Map2KeyDoor : MonoBehaviour, IInteractable {
+    public class Map2KeyDoor : MonoBehaviour, IInteractable, IPauseable {
         [Header("Configurações Visuais")]
         private Outline _outline;
         private TextMeshPro _textLocal;
@@ -61,6 +61,8 @@ namespace FifthSemester.Gameplay.Map2 {
         private Color _unlockedColor;
         private string _defaultText;
         private bool _endingStarted;
+        private IPauseService _pauseService;
+        private bool _paused;
 
         public bool IsInteractable => !_endingStarted;
         public bool CanBeOpenedByNurse => _canBeOpenedByNurse;
@@ -68,6 +70,7 @@ namespace FifthSemester.Gameplay.Map2 {
         public string Id => gameObject.name;
 
         private void Awake() {
+            _pauseService = ServiceLocator.Get<IPauseService>();
             _outline = GetComponent<Outline>();
             _outline.enabled = false;
             _collider = GetComponent<Collider>();
@@ -86,6 +89,11 @@ namespace FifthSemester.Gameplay.Map2 {
             _unlockedColor = new Color32(105, 255, 144, 255);
         }
 
+        private void OnEnable() { _pauseService.Register(this); }
+        private void OnDisable() { _pauseService.Unregister(this); }
+        public void OnPause() { _paused = true; }
+        public void OnResume() { _paused = false; }
+
         private void Start() {
             ServiceLocator.TryGet<IInventoryService<Item>>(out _inventoryService);
             ServiceLocator.TryGet<IAudioService>(out _audioService);
@@ -95,6 +103,7 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         private void Update() {
+            if (_paused) return;
             if (_activeDoorMeshes == null || _targetRotations == null || _targetPositions == null) {
                 return;
             }
@@ -111,7 +120,7 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         public void Interact() {
-            if (_endingStarted) return;
+            if (_paused || _endingStarted) return;
             if (_isBadEndingDoor && !HasDeliveryCutscenePlayed() && !Map2CheatController.IsCheatActive) {
                 if (_map2KeyService != null && _map2KeyService.HasCollectedAllKeys) {
                     TriggerBadEnding();
@@ -133,6 +142,7 @@ namespace FifthSemester.Gameplay.Map2 {
         }
 
         public void TryOpenByAI() {
+            if (_paused) return;
             Debug.Log($"[Map2KeyDoor] TryOpenByAI called on '{gameObject.name}'. _canBeOpenedByNurse={_canBeOpenedByNurse}, _isOpen={_isOpen}");
             
             if (!_canBeOpenedByNurse) {
