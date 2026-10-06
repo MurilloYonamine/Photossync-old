@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a47002e4a7e8f1849bcbef03e026798c, type: 3}
   m_Name: AudioDefault
   m_EditorClassIdentifier: 
-  MasterVolume: 1
-  MusicVolume: 1
-  SFXVolume: 1
-  AmbienceVolume: 1
+  MasterVolume: 100
+  MusicVolume: 100
+  SFXVolume: 100
+  AmbienceVolume: 100
   ForceMonoAudio: 0

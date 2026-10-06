@@ -6,6 +6,12 @@ using UnityEngine;
 
 namespace FifthSemester.Gameplay.Menu {
     public class SettingsService : ISettingsService {
+        private const string TAG = "<color=yellow><b>[SettingsService]</b></color>";
+        private const string AUDIO_VOLUME_MIGRATION_KEY = "Settings_AudioVolumeMigratedTo100";
+        private const string MASTER_VOLUME_KEY = "Settings_MasterVolume";
+        private const string MUSIC_VOLUME_KEY = "Settings_MusicVolume";
+        private const string SFX_VOLUME_KEY = "Settings_SFXVolume";
+        private const string AMBIENCE_VOLUME_KEY = "Settings_AmbienceVolume";
 
         private bool GetBool(string key, bool defaultValue = false) {
             return PlayerPrefs.GetInt(key, defaultValue ? 1 : 0) == 1;
@@ -17,7 +23,26 @@ namespace FifthSemester.Gameplay.Menu {
         }
 
         public SettingsService() {
+            MigrateAudioVolumes();
             ApplyStartupScreenSettings();
+        }
+
+        private void MigrateAudioVolumes() {
+            if (PlayerPrefs.HasKey(AUDIO_VOLUME_MIGRATION_KEY)) return;
+
+            MigrateAudioVolume(MASTER_VOLUME_KEY);
+            MigrateAudioVolume(MUSIC_VOLUME_KEY);
+            MigrateAudioVolume(SFX_VOLUME_KEY);
+            MigrateAudioVolume(AMBIENCE_VOLUME_KEY);
+
+            PlayerPrefs.SetInt(AUDIO_VOLUME_MIGRATION_KEY, 1);
+            PlayerPrefs.Save();
+        }
+
+        private void MigrateAudioVolume(string key) {
+            if (PlayerPrefs.HasKey(key) && PlayerPrefs.GetFloat(key) == 1f) {
+                PlayerPrefs.SetFloat(key, 100f);
+            }
         }
 
         private void ApplyStartupScreenSettings() {
@@ -34,20 +59,20 @@ namespace FifthSemester.Gameplay.Menu {
 
         // ====== Audio ======
         public float MasterVolume {
-            get => PlayerPrefs.GetFloat("Settings_MasterVolume", 1f); 
-            set { PlayerPrefs.SetFloat("Settings_MasterVolume", value); PlayerPrefs.Save(); } 
+            get => PlayerPrefs.GetFloat(MASTER_VOLUME_KEY, 100f);
+            set { PlayerPrefs.SetFloat(MASTER_VOLUME_KEY, value); PlayerPrefs.Save(); }
         }
         public float MusicVolume {
-            get => PlayerPrefs.GetFloat("Settings_MusicVolume", 1f);
-            set { PlayerPrefs.SetFloat("Settings_MusicVolume", value); PlayerPrefs.Save(); }
+            get => PlayerPrefs.GetFloat(MUSIC_VOLUME_KEY, 100f);
+            set { PlayerPrefs.SetFloat(MUSIC_VOLUME_KEY, value); PlayerPrefs.Save(); }
         }
         public float SFXVolume {
-            get => PlayerPrefs.GetFloat("Settings_SFXVolume", 1f);
-            set { PlayerPrefs.SetFloat("Settings_SFXVolume", value); PlayerPrefs.Save(); }
+            get => PlayerPrefs.GetFloat(SFX_VOLUME_KEY, 100f);
+            set { PlayerPrefs.SetFloat(SFX_VOLUME_KEY, value); PlayerPrefs.Save(); }
         }
         public float AmbienceVolume {
-            get => PlayerPrefs.GetFloat("Settings_AmbienceVolume", 1f);
-            set { PlayerPrefs.SetFloat("Settings_AmbienceVolume", value); PlayerPrefs.Save(); }
+            get => PlayerPrefs.GetFloat(AMBIENCE_VOLUME_KEY, 100f);
+            set { PlayerPrefs.SetFloat(AMBIENCE_VOLUME_KEY, value); PlayerPrefs.Save(); }
         }
         public bool ForceMonoAudio {
             get => GetBool("Settings_ForceMonoAudio", false);
